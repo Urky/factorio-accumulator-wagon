@@ -2,10 +2,10 @@ require('util')
 
 -- wagon is parked, verify that it has a proxy accumulator created
 local function ensure_proxy(entity, proxy_type)
-  if not global.wagons[entity.unit_number] then
-    global.wagons[entity.unit_number] = {}
+  if not storage.wagons[entity.unit_number] then
+    storage.wagons[entity.unit_number] = {}
   end
-  local config = global.wagons[entity.unit_number]
+  local config = storage.wagons[entity.unit_number]
   if config.proxy and config.proxy.valid then
     -- already a proxy, bail
     return
@@ -27,17 +27,17 @@ local function ensure_proxy(entity, proxy_type)
     -- track the proxy
     config.proxy = proxy
     -- mark as active for on_nth_tick
-    global.active_wagons[entity.unit_number] = entity
+    storage.active_wagons[entity.unit_number] = entity
   end
 end
 
 -- wagon is moving, the proxy should go away.
 local function ensure_no_proxy(entity)
-  if global.wagons[entity.unit_number] and global.wagons[entity.unit_number].proxy then
-    if global.wagons[entity.unit_number].proxy.valid then
-      global.wagons[entity.unit_number].proxy.destroy()
+  if storage.wagons[entity.unit_number] and storage.wagons[entity.unit_number].proxy then
+    if storage.wagons[entity.unit_number].proxy.valid then
+      storage.wagons[entity.unit_number].proxy.destroy()
     end
-    global.wagons[entity.unit_number].proxy = nil
+    storage.wagons[entity.unit_number].proxy = nil
   end
 end
 
@@ -45,11 +45,11 @@ end
 local function on_entity_gone(event)
   if event.entity and event.entity.valid and event.entity.name == "accumulator-wagon" then
     local unit_number = event.entity.unit_number
-    if global.wagons[unit_number] then
-      if global.wagons[unit_number].proxy and global.wagons[unit_number].proxy.valid then
-        global.wagons[unit_number].proxy.destroy()
+    if storage.wagons[unit_number] then
+      if storage.wagons[unit_number].proxy and storage.wagons[unit_number].proxy.valid then
+        storage.wagons[unit_number].proxy.destroy()
       end
-      global.wagons[unit_number] = nil
+      storage.wagons[unit_number] = nil
     end
   end
 end
@@ -90,9 +90,9 @@ end
 local function check_active_wagons(event)
   -- track which trains have a state change so that we can bump their state later, for inactivity conditions
   local refresh_trains = {}
-  for unit_number, entity in pairs(global.active_wagons) do
+  for unit_number, entity in pairs(storage.active_wagons) do
     if entity.valid then
-      local config = global.wagons[entity.unit_number]
+      local config = storage.wagons[entity.unit_number]
       if config and config.proxy and config.proxy.valid then
         -- train's still here, sync up the indicator fluid
         local fluidbox = entity.fluidbox[1]
@@ -148,11 +148,11 @@ local function check_active_wagons(event)
         end
       else
         -- proxy went away or config otherwise messed up, remove
-        global.active_wagons[unit_number] = nil
+        storage.active_wagons[unit_number] = nil
       end
     else
       -- wagon went away, remove
-      global.active_wagons[unit_number] = nil
+      storage.active_wagons[unit_number] = nil
     end
   end
 
@@ -165,7 +165,7 @@ local function check_active_wagons(event)
     end
   end
   -- unregister if none left
-  if not next(global.active_wagons) then
+  if not next(storage.active_wagons) then
     script.on_nth_tick(30, nil)
   end
 end
@@ -177,10 +177,10 @@ local function check_train(train)
     -- scan the train for any wagons to add proxies for
     for _, carriage in ipairs(train.fluid_wagons) do
       if carriage.name == "accumulator-wagon" then
-        local config = global.wagons[carriage.unit_number]
+        local config = storage.wagons[carriage.unit_number]
         if not config then
-          global.wagons[carriage.unit_number] = {}
-          config = global.wagons[carriage.unit_number]
+          storage.wagons[carriage.unit_number] = {}
+          config = storage.wagons[carriage.unit_number]
         end
         if not config.proxy then
           ensure_proxy(carriage, proxy_type)
@@ -188,18 +188,18 @@ local function check_train(train)
       end
     end
     -- enable the on_nth_tick handler to update the wagons if it isn't.
-    if next(global.active_wagons) then
+    if next(storage.active_wagons) then
       script.on_nth_tick(30, check_active_wagons)
     end
   elseif train.state == defines.train_state.on_the_path or train.state == defines.train_state.manual_control then
     -- not at station, ensure no proxies
     for _, carriage in ipairs(train.fluid_wagons) do
       if carriage.name == "accumulator-wagon" then
-        if global.active_wagons[carriage.unit_number] then
-          local config = global.wagons[carriage.unit_number]
+        if storage.active_wagons[carriage.unit_number] then
+          local config = storage.wagons[carriage.unit_number]
           if not config then
-            global.wagons[carriage.unit_number] = {}
-            config = global.wagons[carriage.unit_number]
+            storage.wagons[carriage.unit_number] = {}
+            config = storage.wagons[carriage.unit_number]
           end
           -- save the energy level
           if config.proxy and config.proxy.valid then
@@ -228,14 +228,14 @@ script.on_event(defines.events.on_robot_built_entity, on_built_entity)
 script.on_event(defines.events.script_raised_built, on_built_entity)
 
 local function on_init()
-  global.wagons = {}
-  global.active_wagons = {}
+  storage.wagons = {}
+  storage.active_wagons = {}
 end
 script.on_init(on_init)
 
 -- re-attach on_nth_tick for wagons active when save is loaded
 local function on_load()
-  if next(global.active_wagons) then
+  if next(storage.active_wagons) then
     script.on_nth_tick(30, check_active_wagons)
   end
 end
